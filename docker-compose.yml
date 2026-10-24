@@ -1,0 +1,146 @@
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - kong
+    networks:
+      - publica
+      - privada
+    restart: unless-stopped
+
+  kong:
+    image: kong:3
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "off"
+      KONG_LOG_LEVEL: notice
+    volumes:
+      - ./kong/kong.yml:/kong/kong.yml:ro
+    networks:
+      - privada
+    depends_on:
+      usuarios:
+        condition: service_healthy
+      productos:
+        condition: service_healthy
+      pedidos:
+        condition: service_healthy
+    restart: unless-stopped
+
+  usuarios:
+    build: ./usuarios
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app_password}@db-usuarios:5432/usuarios
+    depends_on:
+      db-usuarios:
+        condition: service_healthy
+    networks:
+      - privada
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/usuarios/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  db-usuarios:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_password}
+      POSTGRES_DB: usuarios
+    volumes:
+      - usuarios_data:/var/lib/postgresql/data
+    networks:
+      - privada
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d usuarios"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  productos:
+    build: ./productos
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app_password}@db-productos:5432/productos
+    depends_on:
+      db-productos:
+        condition: service_healthy
+    networks:
+      - privada
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/productos/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  db-productos:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_password}
+      POSTGRES_DB: productos
+    volumes:
+      - productos_data:/var/lib/postgresql/data
+    networks:
+      - privada
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d productos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  pedidos:
+    build: ./pedidos
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app_password}@db-pedidos:5432/pedidos
+    depends_on:
+      db-pedidos:
+        condition: service_healthy
+    networks:
+      - privada
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/pedidos/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  db-pedidos:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app_password}
+      POSTGRES_DB: pedidos
+    volumes:
+      - pedidos_data:/var/lib/postgresql/data
+    networks:
+      - privada
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d pedidos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+networks:
+  publica:
+  privada:
+    internal: true
+
+volumes:
+  usuarios_data:
+  productos_data:
+  pedidos_data:
